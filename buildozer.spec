@@ -16,33 +16,36 @@ source.include_exts = py,png,jpg,kv,atlas
 source.dir = .
 
 # (list) Application requirements
-# Lưu ý: socket là thư viện chuẩn của Python nên không cần khai báo ở đây
 requirements = python3,kivy
 
 # (str) Supported orientations (landscape, portrait or all)
 orientation = portrait
 
 # (list) Permissions
-# Cực kỳ quan trọng để ứng dụng nhận gói tin mạng từ ESP32
 android.permissions = INTERNET
+
 # (str) Version of the application
-version = 1.1
-# (int) Target Android API, should be as high as possible.
+version = 1.1.0
+
+# (int) Target Android API
 android.api = 33
 
-# (int) Minimum API your APK will support (Đã đặt là 10 tương ứng API 29)
+# (int) Minimum API your APK will support
 android.minapi = 29
 
 # (bool) Indicate whether the application should be fullscreen or not
 fullscreen = 0
 
-# (string) Presplash background color
-# android.presplash_color = #FFFFFF
+# Chỉ định phiên bản NDK ổn định để tránh lỗi build
+android.ndk = 25b
+
+# Tự động chấp nhận giấy phép SDK, cần thiết cho CI/CD
+android.accept_sdk_license = True
 
 [buildozer]
 
-# (int) Log level (0 = error only, 1 = info, 2 = debug (with command output))
+# (int) Log level
 log_level = 2
 
-# (int) Display warning if buildozer is run as root (0 = False, 1 = True)
+# (int) Display warning if buildozer is run as root
 warn_on_root = 1
