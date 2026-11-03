@@ -13,6 +13,7 @@ android.minapi = 29
 android.ndk = 25b
 android.accept_sdk_license = True
 fullscreen = 0
+p4a.branch = develop
 
 [buildozer]
 log_level = 2
