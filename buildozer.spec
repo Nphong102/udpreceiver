@@ -2,18 +2,21 @@
 title = UDPReceiver
 package.name = udpreceiver
 package.domain = org.np102
-source.include_exts = py,png,jpg,kv,atlas
 source.dir = .
-requirements = python3,kivy
-orientation = portrait
-android.permissions = INTERNET
+source.include_exts = py,png,jpg,kv,atlas
 version = 1.1.0
+requirements = python3,kivy==2.3.0
+orientation = portrait
+fullscreen = 0
+android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE
 android.api = 33
 android.minapi = 29
 android.ndk = 25b
+android.archs = arm64-v8a
 android.accept_sdk_license = True
-fullscreen = 0
-p4a.branch = develop
+
+# Không dùng develop nữa. Dùng bản release ổn định:
+p4a.branch = v2024.01.21
 
 [buildozer]
 log_level = 2
