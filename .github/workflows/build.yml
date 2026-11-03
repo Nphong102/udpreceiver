@@ -40,10 +40,13 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install buildozer cython==0.29.33 virtualenv
-      - name: Clean libffi build cache
+          
+      - name: Deep Clean Build Environment
         run: |
-            # Buộc p4a xóa bản build libffi cũ
-            p4a clean_builds libffi || true  
+          p4a clean_builds libffi || true
+          buildozer appclean || true
+          rm -rf ~/.buildozer/android/packages
+      
       - name: Build with Buildozer
         run: |
           yes | buildozer -v android debug
