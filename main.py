@@ -6,9 +6,12 @@ from datetime import datetime
 
 from kivy.app import App
 from kivy.clock import Clock
+from kivy.core.window import Window
 from kivy.lang import Builder
-from kivy.properties import BooleanProperty, StringProperty
+from kivy.properties import BooleanProperty, ColorProperty, StringProperty
+from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
 from kivy.utils import platform
 
 from common import (
@@ -24,137 +27,261 @@ FIRST_LOAD_BYTES = 200 * 1024
 SERVICE_NAME = "Udpservice"  # khớp với `services = udpservice:...` trong buildozer.spec
 KNOWN_KEYS = {"voltage_v", "wake", "time", "time_valid"}
 
+GREEN = (0.24, 0.86, 0.59, 1)
+RED = (1.0, 0.40, 0.40, 1)
+WHITE = (1, 1, 1, 1)
+
 KV = """
+<Card>:
+    padding: dp(12)
+    canvas.before:
+        Color:
+            rgba: self.bg
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(16)]
+
+<InfoCard>:
+    orientation: 'vertical'
+    size_hint_y: None
+    height: dp(64)
+    spacing: dp(2)
+    Label:
+        text: root.title
+        font_size: '11sp'
+        color: .55, .60, .66, 1
+        halign: 'left'
+        valign: 'bottom'
+        text_size: self.size
+    Label:
+        text: root.value
+        font_size: '16sp'
+        bold: True
+        color: root.v_color
+        halign: 'left'
+        valign: 'top'
+        shorten: True
+        text_size: self.size
+
+<PillButton>:
+    color: 1, 1, 1, 1
+    bold: True
+    canvas.before:
+        Color:
+            rgba: self.bg if self.state == 'normal' else [self.bg[0] * .75, self.bg[1] * .75, self.bg[2] * .75, 1]
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [self.height / 2]
+
 <LogLine@Label>:
     size_hint_y: None
     height: dp(22)
     font_size: '12sp'
+    color: .82, .86, .90, 1
     halign: 'left'
     valign: 'middle'
     shorten: True
     shorten_from: 'right'
     text_size: self.width, None
 
-<FieldRow>:
-    size_hint_y: None
-    height: dp(34)
-    Label:
-        text: root.title
-        color: .65, .65, .65, 1
-        size_hint_x: .42
-        font_size: '14sp'
-        halign: 'left'
-        valign: 'middle'
-        text_size: self.size
-    Label:
-        text: root.value
-        bold: True
-        font_size: '18sp'
-        halign: 'left'
-        valign: 'middle'
-        text_size: self.size
-
 <Root>:
     orientation: 'vertical'
-    padding: dp(8)
-    spacing: dp(4)
+    padding: dp(12)
+    spacing: dp(8)
 
+    # ---------- tiêu đề + trạng thái ----------
     BoxLayout:
         size_hint_y: None
-        height: dp(44)
-        spacing: dp(6)
+        height: dp(48)
+        spacing: dp(8)
+        BoxLayout:
+            orientation: 'vertical'
+            Label:
+                text: 'UDP Receiver'
+                font_size: '20sp'
+                bold: True
+                halign: 'left'
+                valign: 'middle'
+                text_size: self.size
+            Label:
+                text: root.status
+                font_size: '12sp'
+                color: .55, .60, .66, 1
+                halign: 'left'
+                valign: 'middle'
+                shorten: True
+                text_size: self.size
+        Widget:
+            size_hint: None, None
+            size: dp(10), dp(10)
+            pos_hint: {'center_y': .5}
+            canvas:
+                Color:
+                    rgba: (.24, .86, .59, 1) if root.running else (.55, .60, .66, 1)
+                Ellipse:
+                    pos: self.pos
+                    size: self.size
         Label:
-            text: 'Port:'
+            text: 'Đang chạy' if root.running else 'Đã dừng'
+            font_size: '13sp'
             size_hint_x: None
-            width: dp(45)
-        TextInput:
-            id: port_input
-            text: '5005'
-            input_filter: 'int'
-            multiline: False
+            width: dp(70)
+            color: (.24, .86, .59, 1) if root.running else (.55, .60, .66, 1)
+            halign: 'left'
+            valign: 'middle'
+            text_size: self.size
+
+    # ---------- thẻ điện áp ----------
+    Card:
+        orientation: 'vertical'
+        size_hint_y: None
+        height: dp(128)
+        bg: .10, .19, .30, 1
+        Label:
+            text: 'ĐIỆN ÁP'
+            font_size: '12sp'
+            bold: True
+            color: .55, .72, .92, 1
+            size_hint_y: None
+            height: dp(20)
+            halign: 'left'
+            valign: 'bottom'
+            text_size: self.size
+        Label:
+            text: root.f_voltage
+            font_size: '46sp'
+            bold: True
+            halign: 'left'
+            valign: 'middle'
+            text_size: self.size
+        Label:
+            text: root.f_sub
+            font_size: '12sp'
+            color: .55, .72, .92, 1
+            size_hint_y: None
+            height: dp(20)
+            halign: 'left'
+            valign: 'top'
+            shorten: True
+            text_size: self.size
+
+    # ---------- các trường ----------
+    BoxLayout:
+        size_hint_y: None
+        height: dp(64)
+        spacing: dp(8)
+        InfoCard:
+            title: 'NGUYÊN NHÂN THỨC DẬY'
+            value: root.f_wake
+        InfoCard:
+            title: 'GIỜ THIẾT BỊ HỢP LỆ'
+            value: root.f_valid
+            v_color: root.valid_color
+    InfoCard:
+        title: 'THỜI GIAN THIẾT BỊ'
+        value: root.f_time
+    BoxLayout:
+        size_hint_y: None
+        height: dp(64)
+        spacing: dp(8)
+        InfoCard:
+            title: 'SỐ GÓI (PHIÊN NÀY)'
+            value: root.f_count
+        InfoCard:
+            title: 'TỪ ĐỊA CHỈ'
+            value: root.f_from
+
+    # ---------- nhật ký ----------
+    Card:
+        orientation: 'vertical'
+        spacing: dp(6)
+        BoxLayout:
+            size_hint_y: None
+            height: dp(30)
+            spacing: dp(6)
+            Label:
+                text: 'Nhật ký'
+                font_size: '14sp'
+                bold: True
+                halign: 'left'
+                valign: 'middle'
+                text_size: self.size
+            PillButton:
+                text: 'Tự cuộn: Bật' if root.autoscroll else 'Tự cuộn: Tắt'
+                font_size: '12sp'
+                size_hint_x: None
+                width: dp(112)
+                bg: (.24, .86, .59, .55) if root.autoscroll else (.22, .28, .34, 1)
+                on_release: root.autoscroll = not root.autoscroll
+            PillButton:
+                text: 'Xóa'
+                font_size: '12sp'
+                size_hint_x: None
+                width: dp(56)
+                bg: .22, .28, .34, 1
+                on_release: root.clear_view()
+        RecycleView:
+            id: rv
+            viewclass: 'LogLine'
+            scroll_type: ['bars', 'content']
+            bar_width: dp(5)
+            RecycleBoxLayout:
+                default_size: None, dp(22)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: 'vertical'
+        Label:
+            text: root.log_file
+            size_hint_y: None
+            height: dp(26)
+            font_size: '9sp'
+            color: .45, .50, .56, 1
+            halign: 'left'
+            valign: 'middle'
+            text_size: self.size
+
+    # ---------- thanh điều khiển ----------
+    BoxLayout:
+        size_hint_y: None
+        height: dp(52)
+        spacing: dp(8)
+        Card:
             size_hint_x: None
-            width: dp(80)
-            disabled: root.running
-        Button:
-            text: 'Dừng' if root.running else 'Bắt đầu'
+            width: dp(88)
+            padding: 0
+            bg: .13, .17, .21, 1
+            TextInput:
+                id: port_input
+                hint_text: 'Port'
+                text: '5005'
+                input_filter: 'int'
+                multiline: False
+                halign: 'center'
+                padding: [dp(8), (self.height - self.line_height) / 2]
+                background_normal: ''
+                background_active: ''
+                background_disabled_normal: ''
+                background_color: 0, 0, 0, 0
+                foreground_color: 1, 1, 1, 1
+                disabled_foreground_color: .55, .60, .66, 1
+                hint_text_color: .45, .50, .56, 1
+                cursor_color: .24, .86, .59, 1
+                disabled: root.running
+        PillButton:
+            text: 'DỪNG' if root.running else 'BẮT ĐẦU'
+            font_size: '16sp'
+            bg: (.90, .36, .36, 1) if root.running else (.24, .78, .55, 1)
+            color: (1, 1, 1, 1) if root.running else (.03, .10, .07, 1)
             on_release: root.toggle()
-        Button:
+        PillButton:
             text: 'Pin'
             size_hint_x: None
-            width: dp(55)
+            width: dp(60)
+            bg: .22, .28, .34, 1
             on_release: root.open_battery_settings()
-        Button:
-            text: 'Xóa'
-            size_hint_x: None
-            width: dp(55)
-            on_release: root.clear_view()
-
-    Label:
-        text: root.status
-        size_hint_y: None
-        height: dp(24)
-        font_size: '13sp'
-        halign: 'left'
-        text_size: self.width, None
-
-    FieldRow:
-        title: 'Điện áp'
-        value: root.f_voltage
-    FieldRow:
-        title: 'Nguyên nhân thức dậy'
-        value: root.f_wake
-    FieldRow:
-        title: 'Thời gian thiết bị'
-        value: root.f_time
-    FieldRow:
-        title: 'Giờ thiết bị hợp lệ'
-        value: root.f_valid
-    FieldRow:
-        title: 'Trường khác'
-        value: root.f_extra
-    FieldRow:
-        title: 'Nhận lúc'
-        value: root.f_rx
-    FieldRow:
-        title: 'Từ địa chỉ'
-        value: root.f_from
-    FieldRow:
-        title: 'Số gói (phiên này)'
-        value: root.f_count
-
-    BoxLayout:
-        size_hint_y: None
-        height: dp(34)
-        Label:
-            text: 'Tự cuộn xuống'
-            font_size: '13sp'
-        Switch:
-            active: root.autoscroll
-            on_active: root.autoscroll = self.active
-            size_hint_x: None
-            width: dp(80)
-
-    RecycleView:
-        id: rv
-        viewclass: 'LogLine'
-        scroll_type: ['bars', 'content']
-        bar_width: dp(6)
-        RecycleBoxLayout:
-            default_size: None, dp(22)
-            default_size_hint: 1, None
-            size_hint_y: None
-            height: self.minimum_height
-            orientation: 'vertical'
-
-    Label:
-        text: root.log_file
-        size_hint_y: None
-        height: dp(34)
-        font_size: '10sp'
-        color: .6, .6, .6, 1
-        halign: 'left'
-        valign: 'middle'
-        text_size: self.width, self.height
 """
 
 
@@ -219,9 +346,19 @@ def stop_service():
         pass
 
 
-class FieldRow(BoxLayout):
+# ------------------------------------------------------------ widget giao diện
+class Card(BoxLayout):
+    bg = ColorProperty([0.10, 0.13, 0.16, 1])
+
+
+class InfoCard(Card):
     title = StringProperty("")
     value = StringProperty("—")
+    v_color = ColorProperty(WHITE)
+
+
+class PillButton(ButtonBehavior, Label):
+    bg = ColorProperty([0.22, 0.28, 0.34, 1])
 
 
 class Root(BoxLayout):
@@ -231,11 +368,11 @@ class Root(BoxLayout):
     log_file = StringProperty("")
 
     f_voltage = StringProperty("—")
+    f_sub = StringProperty("Chưa có dữ liệu")
     f_wake = StringProperty("—")
     f_time = StringProperty("—")
     f_valid = StringProperty("—")
-    f_extra = StringProperty("—")
-    f_rx = StringProperty("—")
+    valid_color = ColorProperty(WHITE)
     f_from = StringProperty("—")
     f_count = StringProperty("0")
 
@@ -311,11 +448,11 @@ class Root(BoxLayout):
         if st.get("error") and alive:
             self.status = st["error"]
         elif alive:
-            self.status = "Đang nhận trên port %s (service chạy nền)" % st.get("port", "?")
+            self.status = "Đang nghe port %s · chạy nền" % st.get("port", "?")
         elif self.running:
             self.status = "Đang khởi động service..."
         else:
-            self.status = self._msg or "Đã dừng"
+            self.status = self._msg or "Nhấn BẮT ĐẦU để nhận dữ liệu"
         if alive:
             self.f_count = str(st.get("count", 0))
 
@@ -323,7 +460,7 @@ class Root(BoxLayout):
 
     def _read_new_lines(self):
         path = log_path()
-        self.log_file = "Log: " + path
+        self.log_file = path
         if path != self._cur_path:
             self._cur_path = path
             self._offset = None
@@ -367,11 +504,11 @@ class Root(BoxLayout):
         self._show_record(last)
 
     def _show_record(self, rec):
-        self.f_rx = fmt_time(rec.get("rx"))
+        rx = fmt_time(rec.get("rx"))
         self.f_from = rec.get("from", "—")
         d = rec.get("data")
         if not isinstance(d, dict):
-            self.f_extra = rec.get("raw", "—")
+            self.f_sub = "Nhận lúc %s  |  %s" % (rx, rec.get("raw", ""))
             return
         v = d.get("voltage_v")
         if isinstance(v, (int, float)):
@@ -382,12 +519,17 @@ class Root(BoxLayout):
         self.f_time = fmt_time(d.get("time"))
         tv = d.get("time_valid")
         self.f_valid = "Có" if tv is True else "Không" if tv is False else "—"
+        self.valid_color = GREEN if tv is True else RED if tv is False else WHITE
         extra = {k: val for k, val in d.items() if k not in KNOWN_KEYS}
-        self.f_extra = ", ".join("%s=%s" % kv for kv in extra.items()) or "—"
+        sub = "Nhận lúc %s" % rx
+        if extra:
+            sub += "  |  " + ", ".join("%s=%s" % kv for kv in extra.items())
+        self.f_sub = sub
 
 
 class UDPReceiverApp(App):
     def build(self):
+        Window.clearcolor = (0.059, 0.078, 0.098, 1)
         Builder.load_string(KV)
         return Root()
 
