@@ -25,7 +25,8 @@ orientation = portrait
 # (list) Permissions
 # Cực kỳ quan trọng để ứng dụng nhận gói tin mạng từ ESP32
 android.permissions = INTERNET
-
+# (str) Version of the application
+version = 1.1
 # (int) Target Android API, should be as high as possible.
 android.api = 33
 
