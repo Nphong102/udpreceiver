@@ -32,15 +32,18 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt update
-          sudo apt install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config \
-            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 cmake \
-            libffi-dev libssl-dev
+          sudo apt install -y git zip unzip openjdk-17-jdk autoconf automake libtool \
+            libltdl-dev pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
+            libtinfo6 cmake libffi-dev libssl-dev
 
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
           pip install buildozer cython==0.29.33 virtualenv
-
+      - name: Clean libffi build cache
+        run: |
+            # Buộc p4a xóa bản build libffi cũ
+            p4a clean_builds libffi || true  
       - name: Build with Buildozer
         run: |
           yes | buildozer -v android debug
