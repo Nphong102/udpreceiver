@@ -40,11 +40,6 @@ jobs:
           pip install --upgrade pip
           pip install buildozer cython==0.29.33 virtualenv
           
-      - name: Deep Clean Build Environment
-        run: |
-          p4a clean_builds libffi || true
-          buildozer appclean || true
-          rm -rf ~/.buildozer/android/packages
       - name: Chen ky bi mat KEY_DATABASE
         run: sed -i "s|^API_KEY = .*|API_KEY = \"${{ secrets.KEY_DATABASE }}\"|" firebase_config.py
  
