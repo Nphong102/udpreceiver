@@ -3,58 +3,60 @@ name: CI
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  # Đổi v1 -> v2 để bỏ cache cũ nếu build lạ (không cần vào xóa tay)
+  CACHE_VERSION: v1
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      # Cache để tăng tốc các lần build sau
-      - name: Cache Buildozer global directory
-        uses: actions/cache@v4
-        with:
-          path: ~/.buildozer
-          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
+      # Chỉ tính hash từ các dòng ảnh hưởng đến việc biên dịch.
+      # Đổi version / permissions / services trong spec thì KHÔNG làm mất cache.
+      - name: Compute cache key
+        id: k
+        run: |
+          H=$(grep -E '^(requirements|android\.api|android\.minapi|android\.ndk|android\.archs|p4a\.branch)' buildozer.spec | sha256sum | cut -c1-16)
+          echo "hash=$H" >> "$GITHUB_OUTPUT"
 
-      - name: Cache local Buildozer directory
+      - name: Cache Buildozer (SDK, NDK, p4a và bản biên dịch)
         uses: actions/cache@v4
         with:
-          path: .buildozer
-          key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
+          path: |
+            ~/.buildozer
+            .buildozer
+          key: buildozer-${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ steps.k.outputs.hash }}
+          restore-keys: |
+            buildozer-${{ env.CACHE_VERSION }}-${{ runner.os }}-
 
       - name: Install system dependencies
         run: |
           sudo apt update
           sudo apt install -y git zip unzip openjdk-17-jdk autoconf automake libtool \
             libltdl-dev pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
-            libtinfo6 cmake libffi-dev libssl-dev
+            libtinfo5 cmake libffi-dev libssl-dev
 
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install buildozer cython==0.29.33 virtualenv
-          
-      - name: Deep Clean Build Environment
-        run: |
-          p4a clean_builds libffi || true
-          buildozer appclean || true
-          rm -rf ~/.buildozer/android/packages
-      - name: Deep Clean Build Environment
-        run: sed -i "s|^API_KEY = .*|API_KEY = \"${{ secrets.KEY_DATABASE }}\"|" firebase_config.py
-         
+          pip install buildozer "cython<3" virtualenv
+
       - name: Build with Buildozer
-        run: |
-          yes | buildozer -v android debug
+        run: yes | buildozer -v android debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: bin/*.apk
+          retention-days: 3
