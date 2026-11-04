@@ -5,7 +5,7 @@
 # API_KEY: Firebase Console -> Project settings (bánh răng) -> General -> Web API Key
 #   (để trống nếu Rules đang mở hoàn toàn, nhưng KHÔNG nên làm vậy)
 DATABASE_URL = "https://esp-bat-default-rtdb.asia-southeast1.firebasedatabase.app"
-API_KEY = "AIzaSyAZFCM4DGOn2Fi0DgdWWKgWHJzBz0ufTr8"
+API_KEY = ""
 
 # Nhánh gốc trong database. Dữ liệu nằm ở: <DB_ROOT>/readings/<key>
 DB_ROOT = "udp_receiver"
