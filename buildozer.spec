@@ -4,8 +4,8 @@ package.name = udpreceiver
 package.domain = org.np102
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas
-version = 1.2.0
-requirements = python3,kivy==2.3.0
+version = 1.3.0
+requirements = python3,kivy==2.3.0,certifi
 orientation = portrait
 fullscreen = 0
 

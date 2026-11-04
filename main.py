@@ -8,10 +8,11 @@ from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.lang import Builder
-from kivy.properties import BooleanProperty, ColorProperty, StringProperty
+from kivy.properties import BooleanProperty, ColorProperty, NumericProperty, StringProperty
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
+from kivy.uix.widget import Widget
 from kivy.utils import platform
 
 from common import (
@@ -30,6 +31,24 @@ KNOWN_KEYS = {"voltage_v", "wake", "time", "time_valid"}
 GREEN = (0.24, 0.86, 0.59, 1)
 RED = (1.0, 0.40, 0.40, 1)
 WHITE = (1, 1, 1, 1)
+GREY = (0.55, 0.60, 0.66, 1)
+ORANGE = (1.0, 0.72, 0.20, 1)
+
+# Pin Li-ion: (ngưỡng dưới, tên mức, màu)
+BATTERY_LEVELS = [
+    (3.8, "VERY GOOD", (0.13, 0.77, 0.37, 1)),   # xanh lá đậm
+    (3.5, "GOOD", (0.62, 0.90, 0.45, 1)),        # xanh lá nhạt hơn
+    (3.1, "LOW", ORANGE),                        # vàng cam
+]
+BATTERY_VERY_LOW = ("VERY LOW", RED)             # đỏ
+V_EMPTY, V_FULL = 3.0, 4.2                       # khoảng của thanh hiển thị
+
+
+def battery_level(v):
+    for low, name, color in BATTERY_LEVELS:
+        if v >= low:
+            return name, color
+    return BATTERY_VERY_LOW
 
 KV = """
 <Card>:
@@ -74,6 +93,23 @@ KV = """
             pos: self.pos
             size: self.size
             radius: [self.height / 2]
+
+<LevelBar>:
+    size_hint_y: None
+    height: dp(6)
+    canvas:
+        Color:
+            rgba: 1, 1, 1, .12
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(3)]
+        Color:
+            rgba: self.bar_color
+        RoundedRectangle:
+            pos: self.pos
+            size: self.width * self.ratio, self.height
+            radius: [dp(3)]
 
 <LogLine@Label>:
     size_hint_y: None
@@ -137,33 +173,47 @@ KV = """
     Card:
         orientation: 'vertical'
         size_hint_y: None
-        height: dp(128)
+        height: dp(142)
+        spacing: dp(2)
         bg: .10, .19, .30, 1
-        Label:
-            text: 'ĐIỆN ÁP'
-            font_size: '12sp'
-            bold: True
-            color: .55, .72, .92, 1
+        BoxLayout:
             size_hint_y: None
             height: dp(20)
-            halign: 'left'
-            valign: 'bottom'
-            text_size: self.size
+            Label:
+                text: 'ĐIỆN ÁP · Li-ion'
+                font_size: '12sp'
+                bold: True
+                color: .55, .72, .92, 1
+                halign: 'left'
+                valign: 'bottom'
+                text_size: self.size
+            Label:
+                text: root.level_text
+                font_size: '13sp'
+                bold: True
+                color: root.volt_color
+                halign: 'right'
+                valign: 'bottom'
+                text_size: self.size
         Label:
             text: root.f_voltage
             font_size: '46sp'
             bold: True
+            color: root.volt_color
             halign: 'left'
             valign: 'middle'
             text_size: self.size
+        LevelBar:
+            ratio: root.level_ratio
+            bar_color: root.volt_color
         Label:
             text: root.f_sub
             font_size: '12sp'
             color: .55, .72, .92, 1
             size_hint_y: None
-            height: dp(20)
+            height: dp(22)
             halign: 'left'
-            valign: 'top'
+            valign: 'bottom'
             shorten: True
             text_size: self.size
 
@@ -176,22 +226,36 @@ KV = """
             title: 'NGUYÊN NHÂN THỨC DẬY'
             value: root.f_wake
         InfoCard:
-            title: 'GIỜ THIẾT BỊ HỢP LỆ'
-            value: root.f_valid
-            v_color: root.valid_color
-    InfoCard:
-        title: 'THỜI GIAN THIẾT BỊ'
-        value: root.f_time
+            title: 'SỐ GÓI (PHIÊN NÀY)'
+            value: root.f_count
     BoxLayout:
         size_hint_y: None
         height: dp(64)
         spacing: dp(8)
         InfoCard:
-            title: 'SỐ GÓI (PHIÊN NÀY)'
-            value: root.f_count
+            size_hint_x: 1.6
+            title: 'THỜI GIAN THIẾT BỊ'
+            value: root.f_time
         InfoCard:
-            title: 'TỪ ĐỊA CHỈ'
-            value: root.f_from
+            title: 'GIỜ HỢP LỆ'
+            value: root.f_valid
+            v_color: root.valid_color
+    BoxLayout:
+        size_hint_y: None
+        height: dp(64)
+        spacing: dp(8)
+        InfoCard:
+            title: 'ĐỒNG BỘ FIREBASE'
+            value: root.f_cloud
+            v_color: root.cloud_color
+        PillButton:
+            text: 'Gửi: Bật' if root.cloud_on else 'Gửi: Tắt'
+            font_size: '13sp'
+            size_hint: None, None
+            size: dp(84), dp(40)
+            pos_hint: {'center_y': .5}
+            bg: (.24, .86, .59, .55) if root.cloud_on else (.22, .28, .34, 1)
+            on_release: root.toggle_upload()
 
     # ---------- nhật ký ----------
     Card:
@@ -301,7 +365,9 @@ def summarize(rec):
     if isinstance(d, dict):
         parts = []
         if "voltage_v" in d:
-            parts.append("%sV" % d["voltage_v"])
+            v = d["voltage_v"]
+            ok = isinstance(v, (int, float)) and not isinstance(v, bool)
+            parts.append(("%.2fV" % v) if ok else "%sV" % v)
         if "wake" in d:
             parts.append(str(d["wake"]))
         if "time_valid" in d:
@@ -361,6 +427,11 @@ class PillButton(ButtonBehavior, Label):
     bg = ColorProperty([0.22, 0.28, 0.34, 1])
 
 
+class LevelBar(Widget):
+    ratio = NumericProperty(0)
+    bar_color = ColorProperty(WHITE)
+
+
 class Root(BoxLayout):
     running = BooleanProperty(False)
     autoscroll = BooleanProperty(True)
@@ -373,8 +444,15 @@ class Root(BoxLayout):
     f_time = StringProperty("—")
     f_valid = StringProperty("—")
     valid_color = ColorProperty(WHITE)
-    f_from = StringProperty("—")
     f_count = StringProperty("0")
+
+    volt_color = ColorProperty(WHITE)
+    level_text = StringProperty("")
+    level_ratio = NumericProperty(0)
+
+    cloud_on = BooleanProperty(False)
+    f_cloud = StringProperty("Đang tắt")
+    cloud_color = ColorProperty(GREY)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -388,6 +466,7 @@ class Root(BoxLayout):
         cfg = read_json(config_path(), {}) or {}
         if cfg.get("port"):
             self.ids.port_input.text = str(cfg["port"])
+        self.cloud_on = bool(cfg.get("upload"))
 
         Clock.schedule_interval(self._poll, 0.5)
 
@@ -406,7 +485,9 @@ class Root(BoxLayout):
         except ValueError:
             self._msg = "Port không hợp lệ"
             return
-        write_json_atomic(config_path(), {"port": port})
+        cfg = read_json(config_path(), {}) or {}
+        cfg["port"] = port
+        write_json_atomic(config_path(), cfg)
         err = start_service()
         self._msg = err or ""
         if not err:
@@ -419,6 +500,12 @@ class Root(BoxLayout):
         self._ignore_alive_until = time.time() + 4
         write_json_atomic(status_path(), {"alive": 0})
         self._msg = ""
+
+    def toggle_upload(self):
+        cfg = read_json(config_path(), {}) or {}
+        cfg["upload"] = not cfg.get("upload", False)
+        write_json_atomic(config_path(), cfg)
+        self.cloud_on = cfg["upload"]
 
     def clear_view(self):
         """Chỉ xóa phần hiển thị, KHÔNG xóa file log."""
@@ -445,8 +532,11 @@ class Root(BoxLayout):
         alive = (now - float(st.get("alive", 0) or 0) < 6) and now > self._ignore_alive_until
         self.running = alive or now < self._starting_until
 
+        up = st.get("upload") or {}
         if st.get("error") and alive:
             self.status = st["error"]
+        elif alive and self.cloud_on and up.get("error"):
+            self.status = "Firebase: " + up["error"]
         elif alive:
             self.status = "Đang nghe port %s · chạy nền" % st.get("port", "?")
         elif self.running:
@@ -455,8 +545,22 @@ class Root(BoxLayout):
             self.status = self._msg or "Nhấn BẮT ĐẦU để nhận dữ liệu"
         if alive:
             self.f_count = str(st.get("count", 0))
+        self._update_cloud(alive, up)
 
         self._read_new_lines()
+
+    def _update_cloud(self, alive, up):
+        if not self.cloud_on:
+            self.f_cloud, self.cloud_color = "Đang tắt", GREY
+        elif not alive:
+            self.f_cloud, self.cloud_color = "Bật · gửi khi chạy", GREY
+        elif up.get("error"):
+            self.f_cloud, self.cloud_color = "Lỗi · xem dòng trên", ORANGE
+        else:
+            kb = int(up.get("pending_kb", 0) or 0)
+            tail = "đã đồng bộ" if kb == 0 else "chờ %d KB" % kb
+            self.f_cloud = "Đã gửi %s · %s" % (up.get("uploaded", 0), tail)
+            self.cloud_color = GREEN
 
     def _read_new_lines(self):
         path = log_path()
@@ -505,23 +609,26 @@ class Root(BoxLayout):
 
     def _show_record(self, rec):
         rx = fmt_time(rec.get("rx"))
-        self.f_from = rec.get("from", "—")
+        src = rec.get("from", "—")
         d = rec.get("data")
         if not isinstance(d, dict):
-            self.f_sub = "Nhận lúc %s  |  %s" % (rx, rec.get("raw", ""))
+            self.f_sub = "Nhận lúc %s  ·  %s  |  %s" % (rx, src, rec.get("raw", ""))
             return
         v = d.get("voltage_v")
-        if isinstance(v, (int, float)):
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
             self.f_voltage = "%.2f V" % v
+            self.level_text, self.volt_color = battery_level(v)
+            self.level_ratio = max(0.0, min(1.0, (v - V_EMPTY) / (V_FULL - V_EMPTY)))
         else:
             self.f_voltage = "—" if v is None else str(v)
+            self.level_text, self.volt_color, self.level_ratio = "", WHITE, 0
         self.f_wake = str(d.get("wake", "—"))
         self.f_time = fmt_time(d.get("time"))
         tv = d.get("time_valid")
         self.f_valid = "Có" if tv is True else "Không" if tv is False else "—"
         self.valid_color = GREEN if tv is True else RED if tv is False else WHITE
         extra = {k: val for k, val in d.items() if k not in KNOWN_KEYS}
-        sub = "Nhận lúc %s" % rx
+        sub = "Nhận lúc %s  ·  %s" % (rx, src)
         if extra:
             sub += "  |  " + ", ".join("%s=%s" % kv for kv in extra.items())
         self.f_sub = sub

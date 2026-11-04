@@ -72,6 +72,18 @@ def run():
     port = get_port()
     acquire_locks()
 
+    # Luồng đẩy dữ liệu lên Firebase (chỉ gửi khi người dùng bật trong app)
+    upload_info = {
+        "enabled": False, "uploaded": 0, "skipped": 0,
+        "pending_kb": 0, "error": "", "uid": "", "last_ok": 0,
+    }
+    try:
+        from cloud import Uploader
+
+        Uploader(upload_info).start()
+    except Exception as e:
+        upload_info["error"] = "Không khởi động được uploader: %s" % e
+
     sock = None
     count = 0
     last_rx = ""
@@ -92,6 +104,7 @@ def run():
                 "count": count,
                 "last_rx": last_rx,
                 "error": err,
+                "upload": dict(upload_info),
             },
         )
 
