@@ -2,11 +2,7 @@ name: CI
 
 on:
   workflow_dispatch:
-
-env:
-  # Đổi v1 -> v2 để bỏ cache cũ nếu build lạ (không cần vào xóa tay)
-  CACHE_VERSION: v1
-
+  
 jobs:
   build:
     runs-on: ubuntu-latest
