@@ -46,8 +46,8 @@ jobs:
           p4a clean_builds libffi || true
           buildozer appclean || true
           rm -rf ~/.buildozer/android/packages
-      - name: Inject Firebase API key
-         run: sed -i "s|^API_KEY = .*|API_KEY = \"${{ secrets.FIREBASE_API_KEY }}\"|" firebase_config.py
+      - name: Deep Clean Build Environment
+        run: sed -i "s|^API_KEY = .*|API_KEY = \"${{ secrets.KEY_DATABASE }}\"|" firebase_config.py
          
       - name: Build with Buildozer
         run: |
